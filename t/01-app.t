@@ -1,71 +1,101 @@
-#!perl
+#!/usr/bin/perl
 
-use strict;
-use warnings;
-
-use Test::More tests => 3;
-
-use Dancer2 qw(:syntax :tests);
-use Dancer2::Plugin::Paginator;
-
-use t::lib::App;
-use Dancer2::Test apps => ['t::lib::App'];
+use strict; use warnings;
 
 use JSON ();
+use Test::More;
+use Plack::Test;
+use HTTP::Request::Common;
 
-my ( $res, $expected, $got );
+{
+    package TestApp;
 
-$expected = {
-    'next'       => 5,
-    'first'      => 1,
-    'prev'       => 4,
-    'curr'       => 5,
-    'base_url'   => '/foo/bar/etc',
-    'last'       => 5,
-    'frame_size' => 5,
-    'end'        => 5,
-    'page_size'  => 10,
-    'begin'      => 3,
-    'items'      => 42
+    use Dancer2;
+    use Dancer2::Plugin::Paginator;
+
+    set session => 'Simple';
+    set plugins => {
+        Paginator => {
+            new => {
+                frame_size => 3,
+                page_size  => 3,
+            }
+        }
+    };
+
+    get '/config' => sub {
+        my $paginator = paginator(
+            curr     => 5,
+            items    => 100,
+            base_url => '/foo/bar',
+        );
+
+        to_json { %{$paginator} };
+    };
+
+    get '/custom' => sub {
+        my $paginator = paginator(
+            frame_size => 3,
+            page_size  => 7,
+            curr       => 5,
+            items      => 100,
+            base_url   => '/foo/bar',
+        );
+
+        to_json { %{$paginator} };
+    };
+}
+
+my $url  = 'http://localhost';
+my $test = Plack::Test->create( TestApp->to_app );
+
+my ($got, $exp);
+
+subtest 'Get config' => sub {
+    my $req = GET "$url/config";
+    my $res = $test->request( $req );
+
+    ok $res->is_success, "get /config";
+
+    $got = JSON::from_json($res->content);
+    $exp = {
+        'next'       => 6,
+        'first'      => 1,
+        'prev'       => 4,
+        'curr'       => 5,
+        'base_url'   => '/foo/bar',
+        'last'       => 10,
+        'frame_size' => 5,
+        'end'        => 7,
+        'page_size'  => 10,
+        'begin'      => 3,
+        'items'      => 100,
+        'mode'       => 'path',
+    };
+    is_deeply($got, $exp, 'Testing config data');
 };
-my $paginator = paginator(
-    curr     => 7,
-    items    => 42,
-    base_url => '/foo/bar/etc',
-);
-is_deeply( $paginator, $expected, 'Testing default data' );
 
-$expected = {
-    'next'       => 6,
-    'first'      => 1,
-    'prev'       => 4,
-    'curr'       => 5,
-    'base_url'   => '/foo/bar',
-    'last'       => 10,
-    'frame_size' => 5,
-    'end'        => 7,
-    'page_size'  => 10,
-    'begin'      => 3,
-    'items'      => 100
+subtest 'Get custom' => sub {
+    my $req = GET "$url/custom";
+    my $res = $test->request( $req );
+
+    ok $res->is_success, "get /custom";
+    $got = JSON::from_json($res->content);
+    $exp = {
+        'next'       => 6,
+        'first'      => 1,
+        'prev'       => 4,
+        'curr'       => 5,
+        'base_url'   => '/foo/bar',
+        'last'       => 15,
+        'frame_size' => 3,
+        'end'        => 6,
+        'page_size'  => 7,
+        'begin'      => 4,
+        'items'      => 100,
+        'mode'       => 'path',
+    };
+    is_deeply($got, $exp, 'Testing custom data');
 };
-$res = dancer_response [ GET => '/config' ];
-$got = JSON::from_json( $res->content );
-is_deeply( $got, $expected, 'Testing config data' );
 
-$expected = {
-    'next'       => 6,
-    'first'      => 1,
-    'prev'       => 4,
-    'curr'       => 5,
-    'base_url'   => '/foo/bar',
-    'last'       => 15,
-    'frame_size' => 3,
-    'end'        => 6,
-    'page_size'  => 7,
-    'begin'      => 4,
-    'items'      => 100
-};
-$res = dancer_response [ GET => '/custom' ];
-$got = JSON::from_json( $res->content );
-is_deeply( $got, $expected, 'Testing custom data' );
-
+done_testing();

@@ -1,0 +1,8 @@
+Revision history for Dancer2::Plugin::Paginator
+
+0.02  2017-08-04 MANWAR
+      - Upgraded plugin due to recent changes to Dancer2::Plugin.
+      - Fixed unit test to respect the changes.
+
+0.01  2013-03-07 BLABOS
+      - Module Created.
